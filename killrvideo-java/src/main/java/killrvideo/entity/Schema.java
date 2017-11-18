@@ -2,5 +2,5 @@ package killrvideo.entity;
 
 public interface Schema {
 
-    String KEYSPACE = "killrvideo";
+    String KEYSPACE = "killrvideo_java";
 }

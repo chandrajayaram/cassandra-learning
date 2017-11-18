@@ -86,7 +86,6 @@ public class GrpcServer {
 
     private Server server;
 
-    @PostConstruct
     public void start() throws Exception {
 
         LOGGER.info("Try starting Grpc Server ");
@@ -136,7 +135,6 @@ public class GrpcServer {
         server.start();
     }
 
-    @PreDestroy
     public void stop() {
         eventBus.unregister(videoAddedHandlers);
         eventBus.unregister(cassandraMutationErrorHandler);

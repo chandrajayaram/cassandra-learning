@@ -1,10 +1,5 @@
 package killrvideo.configuration;
 
-import static java.util.stream.Collectors.toList;
-
-import java.util.List;
-import java.util.stream.Collectors;
-
 import javax.inject.Inject;
 
 import org.slf4j.Logger;
@@ -17,10 +12,7 @@ import com.datastax.driver.dse.DseCluster;
 import com.datastax.driver.dse.DseCluster.Builder;
 import com.datastax.driver.dse.DseSession;
 import com.datastax.driver.dse.auth.DsePlainTextAuthProvider;
-import com.datastax.driver.dse.graph.GraphOptions;
-import com.datastax.driver.dse.graph.GraphProtocol;
 import com.datastax.driver.mapping.MappingManager;
-import com.xqbase.etcd4j.EtcdClient;
 
 import killrvideo.utils.ExceptionUtils;
 
@@ -30,7 +22,7 @@ public class DSEConfiguration {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DSEConfiguration.class);
 
-    private static final String CLUSTER_NAME = "killrvideo";
+    private static final String CLUSTER_NAME = "MyLearningCluster";
     private static final String RECOMMENDATION_GRAPH_NAME = "killrvideo_video_recommendations";
     private static final Integer GRAPH_TIMEOUT_DEFAULT = 30000;
 
@@ -38,18 +30,15 @@ public class DSEConfiguration {
     Environment env;
 
     @Inject
-    EtcdClient etcdClient;
-
-    @Inject
     private KillrVideoProperties properties;
 
     @Bean
     public DseSession initializeDSE() {
         LOGGER.info("Initializing connection to Cassandra");
-        LOGGER.info("ETCD Client is: " + etcdClient.toString());
+//        LOGGER.info("ETCD Client is: " + etcdClient.toString());
 
         try {
-            List<String> cassandraHostsAndPorts = etcdClient.listDir("/killrvideo/services/cassandra")
+  /*          List<String> cassandraHostsAndPorts = etcdClient.listDir("/killrvideo/services/cassandra")
                     .stream()
                     .map(node -> node.value)
                     .collect(toList());
@@ -65,13 +54,20 @@ public class DSEConfiguration {
                             .split(":")[1]);
 
             LOGGER.info(String.format("Retrieving cassandra hosts %s and port %s from etcd", cassandraHosts, cassandraPort));
-
-            Builder clusterConfig = new Builder();
+*/
+/*            Builder clusterConfig = new Builder();
             clusterConfig
                     .addContactPoints(cassandraHosts)
                     .withPort(cassandraPort)
                     .withClusterName(CLUSTER_NAME);
+*/
+            Builder clusterConfig = new Builder();
+            clusterConfig
+                    .addContactPoints("127.0.0.1")
+                    .withPort(9042)
+                    .withClusterName(CLUSTER_NAME);
 
+        	
             /**
              * Check to see if we have username and password from the environment
              * This is here because we have a dual use scenario.  One for developers and others
@@ -97,11 +93,11 @@ public class DSEConfiguration {
             /**
              * Add option for the graph based recommendation engine
              */
-            clusterConfig.withGraphOptions(new GraphOptions()
+/*            clusterConfig.withGraphOptions(new GraphOptions()
                     .setGraphName(RECOMMENDATION_GRAPH_NAME)
                     .setReadTimeoutMillis(GRAPH_TIMEOUT_DEFAULT)
                     .setGraphSubProtocol(GraphProtocol.GRAPHSON_2_0)
-            );
+            );*/
 
             DseCluster dseCluster = clusterConfig.build();
 

@@ -51,13 +51,13 @@ public class KillrVideoProperties {
         this.applicationInstanceId = env.getProperty(APPLICATION_INSTANCE_ID, "0");
         this.applicationPort = parseInt(env.getProperty(APPLICATION_PORT, "8899"));
         this.etcdPort = parseInt(env.getProperty(ETCD_PORT, "2379"));
-        this.mutationErrorLog = env.getProperty(CASSANDRA_MUTATION_ERROR_LOG, "/tmp/killrvideo-mutation-errors.log");
+        this.mutationErrorLog = env.getProperty(CASSANDRA_MUTATION_ERROR_LOG, "killrvideo-mutation-errors.log");
 
         /**
          * Need to set env variable KILLRVIDEO_DOCKER_IP and KILLRVIDEO_SERVER_IP before launching application
          */
-        final Optional<String> dockerIp = Optional.ofNullable(System.getenv(KILLRVIDEO_DOCKER_IP));
-        final Optional<String> serverIp = Optional.ofNullable(System.getenv(KILLRVIDEO_HOST_IP));
+        final Optional<String> dockerIp = Optional.ofNullable(env.getProperty(KILLRVIDEO_DOCKER_IP,"127.0.0.1"));
+        final Optional<String> serverIp = Optional.ofNullable(env.getProperty(KILLRVIDEO_HOST_IP,"127.0.0.1"));
 
         if (!dockerIp.isPresent()) {
             final String errorMessage = format("Cannot find environment variable %s. " +
@@ -85,8 +85,8 @@ public class KillrVideoProperties {
         /**
          * Grab the DSE username and password from the environment as well if they exist
          */
-        final Optional<String> dseUsername = Optional.ofNullable(System.getenv(KILLRVIDEO_DSE_USERNAME));
-        final Optional<String> dsePassword = Optional.ofNullable(System.getenv(KILLRVIDEO_DSE_PASSWORD));
+        final Optional<String> dseUsername = Optional.ofNullable(env.getProperty(KILLRVIDEO_DSE_USERNAME));
+        final Optional<String> dsePassword = Optional.ofNullable(env.getProperty(KILLRVIDEO_DSE_PASSWORD));
         this.dseUsername = dseUsername.orElse(null);
         this.dsePassword = dsePassword.orElse(null);
     }
