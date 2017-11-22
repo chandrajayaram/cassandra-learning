@@ -16,6 +16,7 @@ import killrvideo.comments.CommentsServiceOuterClass.CommentOnVideoRequest;
 import killrvideo.comments.CommentsServiceOuterClass.GetUserCommentsRequest;
 import killrvideo.comments.CommentsServiceOuterClass.GetVideoCommentsRequest;
 import killrvideo.common.CommonTypes;
+import killrvideo.entity.User;
 import killrvideo.ratings.RatingsServiceOuterClass.GetRatingRequest;
 import killrvideo.ratings.RatingsServiceOuterClass.GetUserRatingRequest;
 import killrvideo.ratings.RatingsServiceOuterClass.RateVideoRequest;
@@ -436,5 +437,6 @@ public class KillrVideoInputValidator {
             return false;
         }
     }
+
 
 }

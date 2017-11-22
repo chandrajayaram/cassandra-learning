@@ -5,26 +5,30 @@ import javax.inject.Inject;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
-import killrvideo.configuration.DSEConfiguration;
-import killrvideo.configuration.KillrVideoConfiguration;
-import killrvideo.configuration.MapperConfiguration;
+import killrvideo.configuration.KillrvideoConfigurationTest;
+import killrvideo.entity.Profile;
 
 @RunWith(SpringJUnit4ClassRunner.class)
-@ContextConfiguration(classes={KillrVideoConfiguration.class,DSEConfiguration.class,MapperConfiguration.class})
-@ComponentScan("killrvideo")
-@EnableAutoConfiguration
+@ContextConfiguration(classes={KillrvideoConfigurationTest.class})
 public class UserManagementServiceTest {
 	@Inject
 	UserManagementService userManagementService;
 	
+	@Inject
+	UserMgmtService ugmtService;
+	
+	
 	@Test
 	public void testContextInitialization(){
-		String userId = userManagementService.createUser("chandra","jayaram","chandra.jayara.c@gmail.com","testPassword");
+		Profile profile = new Profile();
+		profile.setEmail("chandraoops@rediffmail.com");
+		profile.setFirstname("chandra");
+		profile.setLastname("jayaram");
+		profile.setPassword("testPassword");
+		String userId = ugmtService.createUser(profile);
 		System.out.println(userId);
 	}
 }
