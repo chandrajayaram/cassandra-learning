@@ -245,4 +245,23 @@ public class UserMgmtService {
 		
 	}
 
+
+    public Profile getUserProfile(String userId) throws InterruptedException, ExecutionException{
+    	final BoundStatement getUser = getUserProfile_getUsersPrepared.bind()
+                .setUUID("userid", UUID.fromString(userId));
+    	CompletableFuture<ResultSet> selectUserFuture = FutureUtils.buildCompletableFuture(dseSession.executeAsync(getUser));
+    	CompletableFuture<Profile> profileFuture = selectUserFuture.thenApplyAsync(rs ->{
+    		Row row = rs.one();
+    		Profile profile = new Profile();
+    		profile.setUserid(row.getUUID("userid"));
+    		profile.setFirstname(row.getString("firstname"));
+    		profile.setLastname(row.getString("lastname"));
+    		profile.setEmail(row.getString("email"));
+    		profile.setCreatedAt(row.getTimestamp("created_date"));
+    		return profile;
+    	});
+    	return profileFuture.get();
+    }
+
+   
 }
