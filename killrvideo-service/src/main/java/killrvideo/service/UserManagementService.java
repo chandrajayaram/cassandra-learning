@@ -12,6 +12,7 @@ import javax.inject.Inject;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
 import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.ConsistencyLevel;
@@ -27,7 +28,7 @@ import killrvideo.entity.User;
 import killrvideo.utils.FutureUtils;
 import killrvideo.utils.HashUtils;
 import killrvideo.validation.KillrVideoInputValidator;
-
+@Service
 public class UserManagementService {
 	private static final Logger LOGGER = LoggerFactory.getLogger(UserManagementService.class);
 
