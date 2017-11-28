@@ -45,9 +45,11 @@ public class UserManagementService {
 	private String userCredentialsTableName;
 	private PreparedStatement createUser_checkEmailPrepared;
 	private PreparedStatement createUser_insertUserPrepared;
-	private PreparedStatement getUserUser_getUsersPrepared;
+	private PreparedStatement getUser_getUsersPrepared;
 	private PreparedStatement getUser_credentials;
-
+	private PreparedStatement deleteUserPrepared;
+	private PreparedStatement deleteUserCredentialsPrepared;
+	
 	@PostConstruct
 	public void init() {
 		usersTableName = "users";
@@ -68,19 +70,27 @@ public class UserManagementService {
 																				// transaction
 		).setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM);
 
-		getUserUser_getUsersPrepared = dseSession
-				.prepare(QueryBuilder.select().all().from(Schema.KEYSPACE, usersTableName)
-						.where(QueryBuilder.in("userid", QueryBuilder.bindMarker())))
+		getUser_getUsersPrepared = dseSession
+				.prepare(QueryBuilder.select().from(Schema.KEYSPACE, usersTableName)
+						.where(QueryBuilder.eq("userid", QueryBuilder.bindMarker())))
 				.setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM);
 
 		getUser_credentials = dseSession
 				.prepare(QueryBuilder.select().all().from(Schema.KEYSPACE, userCredentialsTableName)
-						.where(QueryBuilder.in("email", QueryBuilder.bindMarker())))
+						.where(QueryBuilder.eq("email", QueryBuilder.bindMarker())))
 				.setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM);
+		
+		deleteUserPrepared = dseSession.prepare(QueryBuilder.delete().from(Schema.KEYSPACE, usersTableName)
+						.where(QueryBuilder.eq("userid", QueryBuilder.bindMarker())))
+				.setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM);
+		
+		deleteUserCredentialsPrepared= dseSession.prepare(QueryBuilder.delete().from(Schema.KEYSPACE, userCredentialsTableName)
+				.where(QueryBuilder.eq("email", QueryBuilder.bindMarker())))
+		.setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM);
 
 	}
 
-	public String createUser(User user) {
+	public String createUser(User user) throws InterruptedException, ExecutionException {
 
 		LOGGER.debug("-----Start creating user-----");
 
@@ -198,6 +208,8 @@ public class UserManagementService {
 						+ mergeStackTrace(t));
 			}
 		});
+
+		insertUserFuture.get();
 		return userIdUUID.toString();
 	}
 
@@ -222,7 +234,7 @@ public class UserManagementService {
 							userUser = new User();
 							userUser.setEmail(row.getString("email"));
 							userUser.setPassword(row.getString("password"));
-							userUser.setUserId(row.getString("user_id"));
+							userUser.setUserId(row.getUUID("userid").toString());
 						}
 							
 					} catch (Throwable t) {
@@ -244,20 +256,35 @@ public class UserManagementService {
 	}
 
 
-    public User getUserUser(String userId) throws InterruptedException, ExecutionException{
-    	final BoundStatement getUser = getUserUser_getUsersPrepared.bind()
+    public User getUser(String userId) throws InterruptedException, ExecutionException{
+    	final BoundStatement getUser = getUser_getUsersPrepared.bind()
                 .setUUID("userid", UUID.fromString(userId));
     	CompletableFuture<ResultSet> selectUserFuture = FutureUtils.buildCompletableFuture(dseSession.executeAsync(getUser));
-    	CompletableFuture<User> profileFuture = selectUserFuture.thenApplyAsync(rs ->{
-    		Row row = rs.one();
-    		User profile = new User();
-    		profile.setUserId(row.getUUID("userid").toString());
-    		profile.setFirstName(row.getString("firstname"));
-    		profile.setLastName(row.getString("lastname"));
-    		profile.setEmail(row.getString("email"));
-    		profile.setCreatedAt(row.getTimestamp("created_date"));
-    		return profile;
-    	});
-    	return profileFuture.get();
+    	ResultSet rs = selectUserFuture.get();
+    	Row row = rs.one();
+		User profile = new User();
+		profile.setUserId(row.getUUID("userid").toString());
+		profile.setFirstName(row.getString("firstname"));
+		profile.setLastName(row.getString("lastname"));
+		profile.setEmail(row.getString("email"));
+		profile.setCreatedAt(row.getTimestamp("created_date"));
+		return profile;
+    }
+    boolean deleteUser(String userId, String email) throws InterruptedException, ExecutionException{
+    	final BoundStatement deleteUser = deleteUserPrepared.bind()
+                .setUUID("userid", UUID.fromString(userId));
+       	
+    	final BoundStatement deleteUserCredentials = deleteUserCredentialsPrepared.bind()
+                .setString("email", email);
+    	
+    	
+		CompletableFuture<ResultSet> deleteUserFuture = FutureUtils.buildCompletableFuture(dseSession.executeAsync(deleteUser));
+		ResultSet rs = deleteUserFuture.get();
+		
+		CompletableFuture<ResultSet> deleteUserCredentialFuture = FutureUtils.buildCompletableFuture(dseSession.executeAsync(deleteUserCredentials));
+		ResultSet rs1 = deleteUserCredentialFuture.get();
+		
+		return rs.wasApplied() && rs1.wasApplied();
+    	
     }
 }
