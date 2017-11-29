@@ -18,6 +18,7 @@ import org.springframework.core.env.Environment;
 import com.google.common.eventbus.EventBus;
 
 import killrvideo.async.KillrVideoThreadFactory;
+import killrvideo.service.UserCreatedSubscribe;
 
 @Configuration
 public class KillrVideoConfiguration {
@@ -34,7 +35,11 @@ public class KillrVideoConfiguration {
 
     @Bean
     public EventBus createEventBus() {
-        return new EventBus("killrvideo_event_bus");
+        EventBus eventBus = new EventBus("killrvideo_event_bus");
+        
+        eventBus.register(new UserCreatedSubscribe());
+        
+        return eventBus;
     }
 
     @Bean(destroyMethod = "shutdownNow")
