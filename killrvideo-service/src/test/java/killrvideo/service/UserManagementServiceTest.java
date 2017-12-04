@@ -33,7 +33,9 @@ public class UserManagementServiceTest {
 		profile.setFirstName("chandra");
 		profile.setLastName("jayaram");
 		profile.setPassword("testPassword");
-		this.userId = userManagementService.createUser(profile);
+		this.userId = userManagementService.createUser("chandraoops@testmail1.com","testPassword");
+		profile.setUserId(userId);
+		userManagementService.updateUser(profile);
 	}
 	
 	@After

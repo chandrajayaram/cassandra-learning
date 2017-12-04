@@ -25,9 +25,11 @@ import com.google.common.eventbus.EventBus;
 
 import killrvideo.entity.Schema;
 import killrvideo.entity.User;
+import killrvideo.exception.ApplicationException;
 import killrvideo.utils.FutureUtils;
 import killrvideo.utils.HashUtils;
 import killrvideo.validation.KillrVideoInputValidator;
+
 @Service
 public class UserManagementService {
 	private static final Logger LOGGER = LoggerFactory.getLogger(UserManagementService.class);
@@ -49,7 +51,7 @@ public class UserManagementService {
 	private PreparedStatement getUser_credentials;
 	private PreparedStatement deleteUserPrepared;
 	private PreparedStatement deleteUserCredentialsPrepared;
-	
+
 	@PostConstruct
 	public void init() {
 		usersTableName = "users";
@@ -79,28 +81,29 @@ public class UserManagementService {
 				.prepare(QueryBuilder.select().all().from(Schema.KEYSPACE, userCredentialsTableName)
 						.where(QueryBuilder.eq("email", QueryBuilder.bindMarker())))
 				.setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM);
-		
-		deleteUserPrepared = dseSession.prepare(QueryBuilder.delete().from(Schema.KEYSPACE, usersTableName)
+
+		deleteUserPrepared = dseSession
+				.prepare(QueryBuilder.delete().from(Schema.KEYSPACE, usersTableName)
 						.where(QueryBuilder.eq("userid", QueryBuilder.bindMarker())))
 				.setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM);
-		
-		deleteUserCredentialsPrepared= dseSession.prepare(QueryBuilder.delete().from(Schema.KEYSPACE, userCredentialsTableName)
-				.where(QueryBuilder.eq("email", QueryBuilder.bindMarker())))
-		.setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM);
+
+		deleteUserCredentialsPrepared = dseSession
+				.prepare(QueryBuilder.delete().from(Schema.KEYSPACE, userCredentialsTableName)
+						.where(QueryBuilder.eq("email", QueryBuilder.bindMarker())))
+				.setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM);
 
 	}
 
-	public String createUser(User user) throws InterruptedException, ExecutionException {
+	public String createUser(String email, String password) {
 
 		LOGGER.debug("-----Start creating user-----");
 
-		final Date now = new Date();
 		final UUID userIdUUID = UUID.randomUUID();
 
 		/** Trim the password **/
-		final String hashedPassword = HashUtils.hashPassword(user.getPassword().trim());
+		final String hashedPassword = HashUtils.hashPassword(password);
 		final String exceptionMessage = String.format("Exception creating user because it already exists with email %s",
-				user.getEmail());
+				email);
 
 		/**
 		 * We insert first the credentials since the LWT condition is on the
@@ -108,7 +111,7 @@ public class UserManagementService {
 		 *
 		 * Note, the LWT condition is set up at the prepared statement
 		 */
-		final BoundStatement checkEmailQuery = createUser_checkEmailPrepared.bind().setString("email", user.getEmail())
+		final BoundStatement checkEmailQuery = createUser_checkEmailPrepared.bind().setString("email", email)
 				.setString("password", hashedPassword).setUUID("userid", userIdUUID);
 
 		/**
@@ -127,141 +130,139 @@ public class UserManagementService {
 				 * starvation.
 				 */
 				.handleAsync((rs, ex) -> {
-					try {
-						if (rs != null) {
-							/**
-							 * Check the result of the LWT, if it's false the
-							 * email already exists within our user_credentials
-							 * table and must not be duplicated. Note the use of
-							 * wasApplied(), this is a convenience method
-							 * described here ->
-							 * http://docs.datastax.com/en/drivers/java/3.2/com/datastax/driver/core/ResultSet.html#wasApplied--
-							 * that allows an easy check of a conditional
-							 * statement.
-							 */
-							if (!rs.wasApplied()) {
-								throw new Throwable(exceptionMessage);
-							}
-
-						} else { // throw in case our result set is null
-							throw new Throwable(ex);
+					if (rs != null) {
+						/**
+						 * Check the result of the LWT, if it's false the email
+						 * already exists within our user_credentials table and
+						 * must not be duplicated. Note the use of wasApplied(),
+						 * this is a convenience method described here ->
+						 * http://docs.datastax.com/en/drivers/java/3.2/com/datastax/driver/core/ResultSet.html#wasApplied--
+						 * that allows an easy check of a conditional statement.
+						 */
+						if (!rs.wasApplied()) {
+							throw new ApplicationException(exceptionMessage);
 						}
 
-					} catch (Throwable t) {
-						final String message = t.getMessage();
-						LOGGER.debug(this.getClass().getName() + ".createUser() " + message);
-						throw new RuntimeException(t);
+					} else { // throw in case our result set is null
+						throw new ApplicationException(exceptionMessage);
 					}
+
 					return rs;
 				});
 
-		/**
-		 * No LWT error, we can proceed further Execute our insert statement in
-		 * an async fashion as well and pass the result to the next line in the
-		 * chain
-		 */
-		CompletableFuture<ResultSet> insertUserFuture = checkEmailFuture.thenCompose(rs -> {
-			final BoundStatement insertUser = createUser_insertUserPrepared.bind().setUUID("userid", userIdUUID)
-					.setString("firstname", user.getFirstName()).setString("lastname", user.getLastName())
-					.setString("email", user.getEmail()).setTimestamp("created_date", now);
+		try {
+			checkEmailFuture.get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new ApplicationException("Error occoured while creating user", e);
+		}
+		return userIdUUID.toString();
+	}
 
-			return FutureUtils.buildCompletableFuture(dseSession.executeAsync(insertUser));
-		});
+	public void updateUser(User user) {
+
+		LOGGER.debug("-----Start updating user-----");
+
+		final Date now = new Date();
+
+		final BoundStatement insertUser = createUser_insertUserPrepared.bind()
+				.setUUID("userid", UUID.fromString(user.getUserId())).setString("firstname", user.getFirstName())
+				.setString("lastname", user.getLastName()).setString("email", user.getEmail())
+				.setTimestamp("created_date", now);
+
+		CompletableFuture<ResultSet> insertUserFuture = FutureUtils
+				.buildCompletableFuture(dseSession.executeAsync(insertUser));
 
 		/**
 		 * thenAccept in the same thread pool (not using thenAcceptAsync())
 		 */
 		insertUserFuture.thenAccept(rs -> {
-			try {
-				if (rs != null) {
-					/**
-					 * Check to see if userInsert was applied. userId should be
-					 * unique, if not, the insert should fail
-					 */
-					if (rs.wasApplied()) {
-						LOGGER.debug("User id is unique, creating user");
-
-						/**
-						 * eventbus.post() for UserCreated below is located in
-						 * the SuggestedVideos Service class within the handle()
-						 * method. The UserCreated type triggers the handler and
-						 * is responsible for adding data to our graph
-						 * recommendation engine.
-						 */
-						user.setUserId(userIdUUID.toString());
-						eventBus.post(user);
-
-						LOGGER.debug("End creating user");
-
-					} else {
-						throw new Throwable("User ID already exists");
-					}
-				}
-
-			} catch (Throwable t) {
-				/*
-				 * eventBus.post(new CassandraMutationError(request, t));
-				 * responseObserver.onError(Status.INTERNAL.withCause(t).
-				 * asRuntimeException());
+			if (rs != null) {
+				/**
+				 * Check to see if userInsert was applied. userId should be
+				 * unique, if not, the insert should fail
 				 */
-				LOGGER.error(this.getClass().getName() + ".createUser() " + "Exception creating user : "
-						+ mergeStackTrace(t));
+				if (rs.wasApplied()) {
+					LOGGER.debug("Updated user profile");
+
+					/**
+					 * eventbus.post() for UserCreated below is located in the
+					 * SuggestedVideos Service class within the handle() method.
+					 * The UserCreated type triggers the handler and is
+					 * responsible for adding data to our graph recommendation
+					 * engine.
+					 */
+					eventBus.post(user);
+
+					LOGGER.debug("End updating user");
+
+				} else {
+					throw new ApplicationException("Error occoured while updating the user");
+				}
 			}
 		});
-
-		insertUserFuture.get();
-		return userIdUUID.toString();
 	}
 
-	public String verifyCredentials(String email, String password) throws InterruptedException, ExecutionException {
+	public String verifyCredentials(String email, String password) {
 
 		LOGGER.debug("------Start verifying user credentials------");
-		
+
 		final BoundStatement getUserCredentialsQuery = getUser_credentials.bind().setString("email", email);
-		
+
 		CompletableFuture<User> checkEmailFuture = FutureUtils
-				.buildCompletableFuture(dseSession.executeAsync(getUserCredentialsQuery))
-				.handleAsync((rs, ex) -> {
-					User userUser = null; 
+				.buildCompletableFuture(dseSession.executeAsync(getUserCredentialsQuery)).handleAsync((rs, ex) -> {
+					User userUser = null;
 					try {
-						
+
 						if (rs == null) {
-	                        return null;
-	                    }
-						
+							return null;
+						}
+
 						Row row = rs.one();
-						if(row!=null){
+						if (row != null) {
 							userUser = new User();
 							userUser.setEmail(row.getString("email"));
 							userUser.setPassword(row.getString("password"));
 							userUser.setUserId(row.getUUID("userid").toString());
 						}
-							
+
 					} catch (Throwable t) {
 						final String message = t.getMessage();
 						LOGGER.debug(this.getClass().getName() + ".check credentials() " + message);
-						throw new RuntimeException(t);
+						throw new ApplicationException(t);
 					}
 					return userUser;
 				});
-	
-		User userUser =  checkEmailFuture.get();
-		if(userUser == null || !HashUtils.isPasswordValid(password, userUser.getPassword())){
-            final String errorMessage = "Email address or password are not correct.";
-            LOGGER.error(errorMessage);
-            return null;
+
+		User userUser = null;
+		try {
+			userUser = checkEmailFuture.get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new ApplicationException("Error occoured while verifing credentials", e);
+
+		}
+		if (userUser == null || !HashUtils.isPasswordValid(password, userUser.getPassword())) {
+			final String errorMessage = "Email address or password are not correct.";
+			LOGGER.error(errorMessage);
+			return null;
 		}
 		return userUser.getUserId();
-		
+
 	}
 
-
-    public User getUser(String userId) throws InterruptedException, ExecutionException{
-    	final BoundStatement getUser = getUser_getUsersPrepared.bind()
-                .setUUID("userid", UUID.fromString(userId));
-    	CompletableFuture<ResultSet> selectUserFuture = FutureUtils.buildCompletableFuture(dseSession.executeAsync(getUser));
-    	ResultSet rs = selectUserFuture.get();
-    	Row row = rs.one();
+	public User getUser(String userId) {
+		final BoundStatement getUser = getUser_getUsersPrepared.bind().setUUID("userid", UUID.fromString(userId));
+		CompletableFuture<ResultSet> selectUserFuture = FutureUtils
+				.buildCompletableFuture(dseSession.executeAsync(getUser));
+		ResultSet rs;
+		try {
+			rs = selectUserFuture.get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new ApplicationException("Error occoured while retrieving user ", e);
+		}
+		if (rs == null) {
+			return null;
+		}
+		Row row = rs.one();
 		User profile = new User();
 		profile.setUserId(row.getUUID("userid").toString());
 		profile.setFirstName(row.getString("firstname"));
@@ -269,22 +270,27 @@ public class UserManagementService {
 		profile.setEmail(row.getString("email"));
 		profile.setCreatedAt(row.getTimestamp("created_date"));
 		return profile;
-    }
-    boolean deleteUser(String userId, String email) throws InterruptedException, ExecutionException{
-    	final BoundStatement deleteUser = deleteUserPrepared.bind()
-                .setUUID("userid", UUID.fromString(userId));
-       	
-    	final BoundStatement deleteUserCredentials = deleteUserCredentialsPrepared.bind()
-                .setString("email", email);
-    	
-    	
-		CompletableFuture<ResultSet> deleteUserFuture = FutureUtils.buildCompletableFuture(dseSession.executeAsync(deleteUser));
-		ResultSet rs = deleteUserFuture.get();
-		
-		CompletableFuture<ResultSet> deleteUserCredentialFuture = FutureUtils.buildCompletableFuture(dseSession.executeAsync(deleteUserCredentials));
-		ResultSet rs1 = deleteUserCredentialFuture.get();
-		
-		return rs.wasApplied() && rs1.wasApplied();
-    	
-    }
+	}
+
+	boolean deleteUser(String userId, String email) {
+		final BoundStatement deleteUser = deleteUserPrepared.bind().setUUID("userid", UUID.fromString(userId));
+
+		final BoundStatement deleteUserCredentials = deleteUserCredentialsPrepared.bind().setString("email", email);
+
+		try {
+			CompletableFuture<ResultSet> deleteUserFuture = FutureUtils
+					.buildCompletableFuture(dseSession.executeAsync(deleteUser));
+			ResultSet rs;
+
+			rs = deleteUserFuture.get();
+			CompletableFuture<ResultSet> deleteUserCredentialFuture = FutureUtils
+					.buildCompletableFuture(dseSession.executeAsync(deleteUserCredentials));
+			ResultSet rs1 = deleteUserCredentialFuture.get();
+			return rs.wasApplied() && rs1.wasApplied();
+
+		} catch (InterruptedException | ExecutionException e) {
+			throw new ApplicationException("Error occoured while deleting user ", e);
+		}
+
+	}
 }
