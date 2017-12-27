@@ -291,63 +291,30 @@ public class VideoCatalogService {
 	}
 
 	
-	public void getVideoPreviews(GetVideoPreviewsRequest request,
-			StreamObserver<GetVideoPreviewsResponse> responseObserver) {
+	public List<Video> getVideoPreviews(List<String> videoIds) {
 
 		LOGGER.debug("-----Start getting video preview-----");
 
-		if (!validator.isValid(request, responseObserver)) {
-			return;
-		}
-
-		final GetVideoPreviewsResponse.Builder builder = GetVideoPreviewsResponse.newBuilder();
-
-		if (request.getVideoIdsCount() == 0 || request.getVideoIdsList() == null) {
-			responseObserver.onNext(builder.build());
-			responseObserver.onCompleted();
-
+		if (videoIds == null || videoIds.isEmpty()) {
 			LOGGER.warn("No video id provided for video preview");
-
-			return;
+			return null;
 		}
+
 
 		try {
 			/**
 			 * Fire a list of async SELECT, one for each video id
 			 */
-			final List<CompletableFuture<Video>> listFuture = request.getVideoIdsList().stream()
-					.map(uuid -> UUID.fromString(uuid.getValue()))
-					.map(uuid -> FutureUtils.buildCompletableFuture(videoMapper.getAsync(uuid))).collect(toList());
-
-			/**
-			 * Merge all the async SELECT results
-			 */
-			CompletableFuture.allOf(listFuture.toArray(new CompletableFuture[listFuture.size()]))
-					.thenApply(v -> listFuture.stream().map(CompletableFuture::join).collect(toList()))
-					.handle((list, ex) -> {
-						if (list != null) {
-							list.stream().filter(x -> x != null)
-									.forEach(entity -> builder.addVideoPreviews(entity.toVideoPreview()));
-
-							responseObserver.onNext(builder.build());
-							responseObserver.onCompleted();
-
-							LOGGER.debug("End getting video preview");
-
-						} else if (ex != null) {
-							LOGGER.error("Exception getting video preview : " + mergeStackTrace(ex));
-
-							responseObserver.onError(Status.INTERNAL.withCause(ex).asRuntimeException());
-
-						}
-						return list;
-					});
-
+			final List<Video> listVideos = videoIds.stream()
+					.map(uuid -> getVideo(uuid)).collect(toList());
+			
+			return listVideos;
+			
+			
 		} catch (Exception ex) {
 			LOGGER.error("Exception getting video preview : " + mergeStackTrace(ex));
-
-			responseObserver.onError(Status.INTERNAL.withCause(ex).asRuntimeException());
 		}
+		return null;
 	}
 
 	/**
