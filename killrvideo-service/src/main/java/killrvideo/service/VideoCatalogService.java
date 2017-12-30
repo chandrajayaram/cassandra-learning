@@ -46,31 +46,19 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 
-import io.grpc.Status;
-import io.grpc.stub.StreamObserver;
-import killrvideo.common.CommonTypes.Uuid;
-import killrvideo.entity.LatestVideos;
+
+
 import killrvideo.entity.Schema;
 import killrvideo.entity.User;
-import killrvideo.entity.UserVideos;
 import killrvideo.entity.Video;
 import killrvideo.entity.VideoLocationType;
 import killrvideo.entity.YouTubeVideo;
 import killrvideo.events.CassandraMutationError;
 import killrvideo.events.YouTubeVideoAdded;
 import killrvideo.exception.ApplicationException;
-import killrvideo.service.VideoCatalogService.CustomPagingState;
+
 import killrvideo.utils.FutureUtils;
 import killrvideo.validation.KillrVideoInputValidator;
-import killrvideo.video_catalog.VideoCatalogServiceOuterClass.GetLatestVideoPreviewsRequest;
-import killrvideo.video_catalog.VideoCatalogServiceOuterClass.GetLatestVideoPreviewsResponse;
-import killrvideo.video_catalog.VideoCatalogServiceOuterClass.GetUserVideoPreviewsRequest;
-import killrvideo.video_catalog.VideoCatalogServiceOuterClass.GetUserVideoPreviewsResponse;
-import killrvideo.video_catalog.VideoCatalogServiceOuterClass.GetVideoPreviewsRequest;
-import killrvideo.video_catalog.VideoCatalogServiceOuterClass.GetVideoPreviewsResponse;
-import killrvideo.video_catalog.VideoCatalogServiceOuterClass.GetVideoRequest;
-import killrvideo.video_catalog.VideoCatalogServiceOuterClass.GetVideoResponse;
-import killrvideo.video_catalog.VideoCatalogServiceOuterClass.VideoPreview;
 
 @Service
 public class VideoCatalogService {
@@ -357,33 +345,16 @@ public class VideoCatalogService {
 	 *
 	 */
 	
-	public void getLatestVideoPreviews(GetLatestVideoPreviewsRequest request,
-			StreamObserver<GetLatestVideoPreviewsResponse> responseObserver) {
+	public void getLatestVideoPreviews(Date addedDate, String startingVideoId ) {
 
 		LOGGER.debug("-----Start getting latest video preview-----");
 
-		if (!validator.isValid(request, responseObserver)) {
-			return;
-		}
+		final Optional<Date> startingAddedDate = Optional.ofNullable(addedDate);
+				
+		final Optional<UUID> startVideoId = Optional.ofNullable(UUID.fromString(startingVideoId));
+				
 
-		final CustomPagingState customPagingState = parseCustomPagingState(
-				Optional.ofNullable(request.getPagingState())).orElse(this.buildFirstCustomPagingState());
-
-		final List<String> buckets = customPagingState.buckets;
-		int bucketIndex = customPagingState.currentBucket;
-		final String rowPagingState = customPagingState.cassandraPagingState;
-		LOGGER.debug("Custom paging state is: buckets: " + buckets.size() + " index: " + bucketIndex + " state: "
-				+ rowPagingState);
-
-		final Optional<Date> startingAddedDate = Optional.ofNullable(request.getStartingAddedDate())
-				.filter(x -> StringUtils.isNotBlank(x.toString()))
-				.map(x -> Instant.ofEpochSecond(x.getSeconds(), x.getNanos())).map(Date::from);
-
-		final Optional<UUID> startingVideoId = Optional.ofNullable(request.getStartingVideoId())
-				.filter(x -> StringUtils.isNotBlank(x.toString())).map(x -> x.getValue())
-				.filter(StringUtils::isNotBlank).map(UUID::fromString);
-
-		final List<VideoPreview> results = new ArrayList<>();
+		final List<killrvideo.entity.VideoPreview> results = new ArrayList<>();
 		String nextPageState = "";
 
 		/**
@@ -404,13 +375,13 @@ public class VideoCatalogService {
 
 				BoundStatement bound;
 
-				if (startingAddedDate.isPresent() && startingVideoId.isPresent()) {
+				if (startingAddedDate.isPresent() && startVideoId.isPresent()) {
 					/**
 					 * The startingPointPrepared statement can be found at the
 					 * top of the class within PostConstruct
 					 */
 					bound = latestVideoPreview_startingPointPrepared.bind().setString("ymd", yyyyMMdd)
-							.setTimestamp("ad", startingAddedDate.get()).setUUID("vid", startingVideoId.get());
+							.setTimestamp("ad", startingAddedDate.get()).setUUID("vid", startVideoId.get());
 
 					LOGGER.debug("Current query is: " + bound.preparedStatement().getQueryString());
 

@@ -1,0 +1,18 @@
+<html>
+  <head>
+    <!-- Do _not_  rely on this URL in production. Use only during development.  -->
+    <script src="https://netflix.github.io/falcor/build/falcor.browser.js"></script>
+    <script>
+      var model = new falcor.Model({source: new falcor.HttpDataSource('http://localhost:8080/api/hello') });
+
+      // retrieve the "greeting" key from the root of the Virtual JSON resource
+      model.
+        get("hello").
+        then(function(response) {
+          console.log(response);
+        });
+    </script>
+  </head>
+  <body>
+  </body>
+</html>
