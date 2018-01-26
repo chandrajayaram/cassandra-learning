@@ -1,0 +1,1 @@
+ COPY videos FROM 'videos.csv' WITH DELIMITER=',' AND HEADER=FALSE;
