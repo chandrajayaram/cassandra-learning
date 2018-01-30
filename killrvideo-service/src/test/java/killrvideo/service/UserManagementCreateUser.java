@@ -23,9 +23,9 @@ public class UserManagementCreateUser {
 	public void createUser() throws InterruptedException, ExecutionException {
 		
 		User profile = new User();
-		profile.setEmail("chandraoops@gmail.com");
-		profile.setFirstName("chandra");
-		profile.setLastName("jayaram");
+		profile.setEmail("chandraoops1@gmail.com");
+		profile.setFirstName("chandra1");
+		profile.setLastName("jayaram1");
 		profile.setPassword("testPassword");
 		String userId = userManagementService.createUser("chandraoops@gmail.com","testPassword");
 		profile.setUserId(userId);
