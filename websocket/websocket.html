@@ -1,0 +1,49 @@
+<html>
+<head>
+<link rel="stylesheet" href="bootstrap.min.css">
+<link rel="stylesheet" href="app.css">
+<script src="jquery-3.2.1.min.js"></script>
+<script type="text/javascript">
+	var wsUri = getRootUri() + "/websocket-auction/data";
+	var websocket;
+	function getRootUri() {
+		return "ws://" + (document.location.hostname === "" ? "localhost" : document.location.hostname) + ":" +
+			(document.location.port === "" ? "8080" : document.location.port);
+	}
+	function handleResponse(evt) {
+		var mString = evt.data.toString();
+		var data = mString.split(",");
+		$('#data').append('<tr><td>'+ data[0] +'</td><td>'+ data[1]+'</td></tr>');
+	}
+
+	$(document).ready(function() {
+		websocket = new WebSocket(wsUri);
+		websocket.onmessage = function (evt) {
+        	handleResponse(evt);
+    	};
+
+		
+	});
+	
+</script>
+</head>
+
+<body>
+	<div class="container">
+		<h2>Websocket example</h2>
+		<table
+			class="table table-striped table-bordered table-hover table-condensed">
+			<thead>
+				<tr>
+					<th>Datetime</th>
+					<th>Random number </th>
+				</tr>
+			</thead>
+			<tbody id="data">
+				
+			</tbody>
+		</table>
+	</div>
+</body>
+
+</html>
